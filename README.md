@@ -1,4 +1,4 @@
-# One-Page CV
+# Interior Design Studio
 
 Published with OnePage Studio.
 
