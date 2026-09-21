@@ -47,7 +47,20 @@
   }
 
 *,*::before,*::after{box-sizing:border-box}
-html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+/*
+ * 'scroll-padding-top' covers the jumps the runtime never sees.
+ *
+ * Clicking an in-page link is handled in JavaScript, which measures the navbar
+ * that is actually on screen. Two cases never reach that code: arriving on a
+ * URL that already carries a hash, and the back button returning to one. Both
+ * are native jumps performed by the browser, and without a scroll padding they
+ * put the target's top edge at y=0 -- underneath a sticky navbar, which is the
+ * heading the visitor came for, covered.
+ *
+ * It is a static estimate of the navbar's height where the runtime measures the
+ * real thing, and that is the right trade for a path with no script involved.
+ */
+html{scroll-behavior:smooth;scroll-padding-top:88px;-webkit-text-size-adjust:100%}
 body{
   margin:0;background:var(--op-bg);color:var(--op-text);
   font-family:var(--op-font);
@@ -62,12 +75,32 @@ h1,h2,h3,h4{
   margin:0;line-height:1.05;font-family:var(--op-font-head);
   letter-spacing:var(--op-tracking);font-weight:var(--op-head-weight);
 }
+/*
+ * Long words break instead of disappearing.
+ *
+ * body sets overflow-x:hidden, which stops a page scrolling sideways -- and
+ * silently *clips* anything wider than the screen rather than showing it. On a
+ * 390px phone the things that go wide are ordinary: an email address, a URL in a
+ * link, a long compound heading. They were cut off mid-word with no scrollbar
+ * and nothing to indicate a word had been lost.
+ *
+ * overflow-wrap:anywhere rather than break-word because the latter gives up
+ * on an unbroken token that is on its own line, which is exactly the case here.
+ * It only ever acts when a word genuinely cannot fit, so ordinary prose on a
+ * desktop is untouched.
+ */
+h1,h2,h3,h4,p,li,dd,dt,a,span,blockquote{overflow-wrap:anywhere}
 p{margin:0}
 ul{margin:0;padding:0;list-style:none}
 
-/* Anchors placed by the section's ID field. Offset so a sticky navbar does
-   not cover the heading the visitor just jumped to. */
-.op-anchor{display:block;position:relative;height:0;scroll-margin-top:88px}
+/* Anchors placed by the section's ID field.
+   The navbar offset lives on 'html' as 'scroll-padding-top' rather than here as
+   a 'scroll-margin-top', because the two add up: an anchor carrying its own 88px
+   inside a scrollport already padded by 88px lands 176px above the section,
+   which is the previous section's last paragraph. Putting it on the scrollport
+   also means it applies to every jump target, not only to the ones that happen
+   to have an anchor span in front of them. */
+.op-anchor{display:block;position:relative;height:0}
 
 /* ---------- page backdrop: grid + aurora + grain ---------- */
 .op-backdrop{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -91,13 +124,30 @@ ul{margin:0;padding:0;list-style:none}
 .op-page{position:relative;z-index:1}
 
 /* ---------- layout ---------- */
-.op-section{position:relative;padding:calc(clamp(56px,8vw,132px) * var(--op-pad-scale,1)) 24px}
+.op-section{position:relative;padding:calc(clamp(48px,6vw,96px) * var(--op-pad-scale,1)) 24px}
 .op-shell{width:min(var(--op-shell,1180px),100%);margin:0 auto}
 .op-shell.narrow{width:min(820px,100%)}
 .op-grid{display:grid;gap:clamp(16px,2vw,26px)}
 .op-2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .op-3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .op-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+/*
+ * One card in a row built for three or four.
+ *
+ * Without this it takes the left third and leaves two thirds of empty grid
+ * beside it, which reads as two cards that failed to load rather than as the
+ * one thing there is to show. Sections fed from the platform's own records hit
+ * this the day the first testimonial is published, and a partner shelf holding
+ * a single entry hits it permanently.
+ *
+ * It beats op-2 / op-3 / op-4 on specificity at every width, including inside
+ * the breakpoints below — which is correct, because one column is what all of
+ * them collapse to anyway. The --op-solo-w property lets a variant whose cards
+ * are small say so; the default suits a card with a paragraph in it.
+ */
+.op-grid:has(> *:only-child){
+  grid-template-columns:minmax(0,min(100%,var(--op-solo-w,560px)));justify-content:center;
+}
 .op-split{display:grid;gap:clamp(28px,5vw,72px);grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center}
 .op-split.reverse>*:first-child{order:2}
 
@@ -221,9 +271,63 @@ ul{margin:0;padding:0;list-style:none}
   .op-3{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width:620px){
-  .op-section{padding:calc(clamp(44px,11vw,72px) * var(--op-pad-scale,1)) 18px}
+  .op-section{padding:calc(clamp(32px,8vw,56px) * var(--op-pad-scale,1)) 18px}
   .op-2,.op-3,.op-4{grid-template-columns:1fr}
+  .op-actions{margin-top:26px}
   .op-actions .op-btn{flex:1 1 100%;justify-content:center}
+  /*
+   * Anything laid out by auto-fit collapses here too.
+   *
+   * A dozen sections size their own columns with
+   * repeat(auto-fit,minmax(190px,1fr)) and never wrote a breakpoint, because
+   * auto-fit is supposed to make one unnecessary. It does not, quite: 190px
+   * still fits twice inside a 354px content box, so a stat band, a footer's link
+   * columns and a set of contact details each arrived on a phone as two columns
+   * about 170px wide -- headings wrapping every second word under values that
+   * had nowhere to go. One column is the honest answer at this width.
+   */
+  .op-grid,.op-split{gap:clamp(16px,4vw,24px)}
+  /* Headings stop shrinking with the viewport before they become unreadable:
+     6.4vw of a 360px screen is 23px for what is meant to be the page's title. */
+  .op-display{font-size:clamp(2.1rem,9vw,3rem)}
+  .op-title{font-size:clamp(1.6rem,6.6vw,2.1rem)}
+  .op-sub{margin-top:14px;font-size:1rem}
+  .op-head{margin-bottom:28px}
+  /* 44px minimum on anything tapped, and full width so the label has room. */
+  .op-btn{min-height:44px;padding:12px 22px}
+  .op-field{min-height:46px;font-size:16px}
+  /* 16px is not a taste: any smaller and iOS Safari zooms the page in on focus
+     and leaves it zoomed, which is how a form ends up sideways on a phone. */
+  textarea.op-field{min-height:auto}
+  /* A four-up media block at full width is a stack of letterboxes; give the
+     pictures back some height. */
+  .op-media.wide{aspect-ratio:3/2}
+}
+
+/*
+ * Small phones, where two of anything stops working.
+ *
+ * The tier above collapses everything the base sheet lays out, but a variant
+ * that sets its own two-column grid -- a bento, a set of facts, a schedule row
+ * -- keeps it all the way down to 320px. These are the ones where the second
+ * column is narrower than the words inside it.
+ */
+@media (max-width:520px){
+  .op-section{padding:calc(clamp(28px,8vw,44px) * var(--op-pad-scale,1)) 16px}
+  .op-card{padding:18px}
+  .op-eyebrow{margin-bottom:12px}
+  /*
+   * Text stops being right-aligned on a phone.
+   *
+   * Right alignment is a composition choice that needs a column edge to align
+   * against. At full width it puts a ragged left edge on a paragraph that starts
+   * a new line every six words, which is measurably harder to read and looks
+   * like a mistake. The setting is honoured on every screen wide enough for it
+   * to mean something; centring is left alone, since a centred heading over a
+   * single column still reads as deliberate.
+   */
+  .op-align-right{text-align:left}
+  .op-head.center .op-actions,.op-align-center .op-actions{justify-content:stretch}
 }
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
@@ -326,20 +430,40 @@ ul{margin:0;padding:0;list-style:none}
 .v-nav-simple .links a:hover{color:var(--op-text);border-bottom-color:var(--op-a1)}
 .v-nav-simple .tail{display:flex;align-items:center;gap:12px}
 .v-nav-simple .op-btn.sm{padding:9px 18px;font-size:14px}
-.v-nav-simple .burger{display:none;flex-direction:column;gap:4px;width:40px;height:38px;padding:0;
+/* 44px square: the smallest target a thumb hits reliably, and on a phone this
+   is the only control in the header. */
+.v-nav-simple .burger{display:none;flex-direction:column;gap:4px;width:44px;height:44px;flex:none;padding:0;
   align-items:center;justify-content:center;border:1px solid var(--op-stroke);background:transparent;border-radius:var(--op-radius-sm)}
-.v-nav-simple .burger span{display:block;width:17px;height:2px;background:var(--op-text)}
+.v-nav-simple .burger span{display:block;width:18px;height:2px;border-radius:2px;background:var(--op-text);transition:transform .3s cubic-bezier(.16,1,.3,1),opacity .2s}
+/* Open, the bars become a cross — otherwise the only sign the menu opened is a
+   sheet that may begin below the fold, so the tap looked like it did nothing. */
+.v-nav-simple.open .burger span:nth-child(1){transform:translateY(6px) rotate(45deg)}
+.v-nav-simple.open .burger span:nth-child(2){opacity:0}
+.v-nav-simple.open .burger span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
 .v-nav-simple .sheet{display:none}
 @media (max-width:860px){
   .v-nav-simple .links{display:none}
   .v-nav-simple .tail .op-btn{display:none}
   .v-nav-simple .burger{display:flex}
   .v-nav-simple .tail{margin-left:auto}
+  /* 24px of padding either side of a 390px screen is a lot of a small screen
+     spent on nothing, and it is what pushed a long brand name into the burger. */
+  .v-nav-simple .inner{gap:12px;padding:12px 16px}
+  .v-nav-simple .brand{min-width:0;font-size:16px}
+  .v-nav-simple .brand span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .v-nav-simple .sheet{display:block;max-height:0;overflow:hidden;transition:max-height .35s ease;background:var(--op-bg-2)}
-  .v-nav-simple.open .sheet{max-height:320px;border-top:1px solid var(--op-stroke)}
-  .v-nav-simple .sheet nav{display:grid;padding:8px 24px 16px}
-  .v-nav-simple .sheet a{padding:12px 0;border-bottom:1px solid var(--op-stroke)}
-  .v-nav-simple .sheet .sheet-cta{margin-top:14px;padding:11px 18px;border-bottom:0;justify-content:center}
+  /*
+   * Whatever the phone has, rather than a flat 320px.
+   *
+   * Eight links and a call to action is well over 400px of rows, so the last
+   * two links and the CTA were cut off with nothing to suggest they existed.
+   * The inner scroll is what makes a long menu on a short screen reachable.
+   */
+  .v-nav-simple.open .sheet{max-height:calc(100dvh - 68px);border-top:1px solid var(--op-stroke)}
+  .v-nav-simple .sheet nav{display:grid;padding:8px 16px 16px;max-height:calc(100dvh - 84px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+  /* 44px rows, for the same reason as the burger. */
+  .v-nav-simple .sheet a{display:flex;align-items:center;min-height:44px;padding:11px 0;border-bottom:1px solid var(--op-stroke)}
+  .v-nav-simple .sheet .sheet-cta{margin-top:14px;min-height:44px;padding:11px 18px;border-bottom:0;justify-content:center}
 }
 /* hero-classic */
 .v-hero-classic .copy{max-width:64ch}
@@ -455,14 +579,14 @@ ul{margin:0;padding:0;list-style:none}
 <body>
 <div class="op-backdrop" aria-hidden="true"><span class="op-aurora a"></span><span class="op-aurora b"></span><span class="op-aurora c"></span></div>
 <div class="op-page" id="top">
-<header id="sec-4lxacem" class="v-nav-simple sticky solid" data-op-nav><div class="inner"><a class="brand" href="#top"><span>GARVIT JAIN</span></a><nav class="links"><a href="#about">About</a><a href="#services">Services</a><a href="#work">Work</a><a href="#contact">Contact</a></nav><div class="tail"><a class="op-btn primary sm" href="#contact">Download PDF</a><button class="burger" data-op-nav-toggle aria-label="Toggle menu"><span></span><span></span><span></span></button></div></div><div class="sheet"><nav><a href="#about">About</a><a href="#services">Services</a><a href="#work">Work</a><a href="#contact">Contact</a><a class="op-btn primary sheet-cta" href="#contact">Download PDF</a></nav></div></header>
-<section id="sec-qvpqb1z" class="op-section v-hero-classic align-center" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(56px,8vw,132px)"><div class="op-shell"><div class="copy op-reveal"><span class="op-eyebrow">Backend engineer · Pune</span><h1 class="op-display">GARVIT JAIN</h1><p class="op-sub">Six years building payment and ledger systems. Currently at a fintech doing reconciliation at scale; open to senior roles.</p><div class="op-actions"><a class="op-btn primary" href="mailto:hello@example.com">Email me</a><a class="op-btn ghost" href="#">GitHub</a></div></div></div></section>
-<section id="sec-5bdoiul" class="op-section v-resume-experience" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(56px,8vw,132px)"><div class="op-shell"><div class="op-head op-align-left op-reveal "><span class="op-eyebrow">Experience</span><h2 class="op-title"><span class="op-gradient">Where I have worked</span></h2></div><div class="entries op-stagger"><article class="entry"><div class="when"><span class="op-num">May – Aug 2026</span><span class="loc">Bengaluru</span></div><div class="what"><h3>Product Design Intern</h3><span class="org">Quantic</span><ul><li>Redesigned the account opening flow, cutting drop-off by 18 points</li><li>Built the first shared component library for the mobile team</li><li>Ran eleven moderated usability sessions</li></ul><div class="stack"><span class="op-chip">Figma</span><span class="op-chip">React</span><span class="op-chip">Storybook</span></div></div></article><article class="entry"><div class="when"><span class="op-num">2025 – present</span><span class="loc">Campus</span></div><div class="what"><h3>Design Lead</h3><span class="org">University Robotics Society</span><ul><li>Led a team of six across brand, web and event collateral</li><li>Doubled event registrations with a rebuilt registration site</li></ul><div class="stack"><span class="op-chip">Figma</span><span class="op-chip">Next.js</span></div></div></article><article class="entry"><div class="when"><span class="op-num">2024 – 2025</span><span class="loc">Remote</span></div><div class="what"><h3>Freelance Designer</h3><span class="org">Independent</span><ul><li>Nine client projects across identity and web</li><li>All delivered on schedule and within a fixed fee</li></ul><div class="stack"><span class="op-chip">Illustrator</span><span class="op-chip">Webflow</span></div></div></article></div></div></section>
-<section id="sec-dyuc80t" class="op-section v-education-cards" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(56px,8vw,132px)"><div class="op-shell"><div class="op-head op-align-left op-reveal "><span class="op-eyebrow">Credentials</span><h2 class="op-title"><span class="op-gradient">Education &amp; recognition</span></h2></div><div class="op-grid op-3 op-stagger"><article class="op-card op-ring cred"><span class="glyph"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8l10-4 10 4-10 4L2 8z"/><path d="M6 10.5V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.5"/></svg></span><h3>B.Des Interaction Design</h3><span class="issuer">National Institute of Design</span><div class="foot"><span class="op-num">2023 – 2027</span><span class="detail">Distinction, thesis on assistive interfaces</span></div></article><article class="op-card op-ring cred"><span class="glyph"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></span><h3>Google UX Certificate</h3><span class="issuer">Coursera</span><div class="foot"><span class="op-num">2025</span><span class="detail">Completed with honours</span></div></article><article class="op-card op-ring cred"><span class="glyph"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 10l6.1-.9z"/></svg></span><h3>Best Student Project</h3><span class="issuer">India Design Awards</span><div class="foot"><span class="op-num">2026</span><span class="detail">For a public transit wayfinding system</span></div></article></div></div></section>
-<section id="sec-4o377o8" class="op-section v-stats-progress" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(56px,8vw,132px)"><div class="op-shell"><div class="op-head op-align-left op-reveal "><span class="op-eyebrow">Toolkit</span><h2 class="op-title"><span class="op-gradient">Where the hours went</span></h2></div><div class="op-grid op-2 op-stagger meters"><div class="meter"><div class="top"><span class="label">Interface design</span><span class="pct">95%</span></div><div class="rail"><span class="fill" style="--w:95%"></span></div><span class="note">Figma, tokens, systems</span></div><div class="meter"><div class="top"><span class="label">Front-end engineering</span><span class="pct">88%</span></div><div class="rail"><span class="fill" style="--w:88%"></span></div><span class="note">TypeScript, React, CSS</span></div><div class="meter"><div class="top"><span class="label">Motion &amp; prototyping</span><span class="pct">76%</span></div><div class="rail"><span class="fill" style="--w:76%"></span></div><span class="note">Rive, Framer, GSAP</span></div><div class="meter"><div class="top"><span class="label">User research</span><span class="pct">64%</span></div><div class="rail"><span class="fill" style="--w:64%"></span></div><span class="note">Interviews, usability</span></div></div></div></section>
-<section id="sec-r0j8ob9" class="op-section v-cards-showcase" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(56px,8vw,132px)"><div class="op-shell"><div class="op-head op-align-left op-reveal "><h2 class="op-title"><span class="">Recent projects</span></h2><p class="op-sub">Click any project to read the detail.</p></div><div class="op-grid op-3 op-stagger"><article class="op-card flush card" data-op-card data-op-card-title="Harbour Mills" data-op-card-eyebrow="Conversion" data-op-card-body="A full condition survey and phased schedule of works for the conversion of a grade II listed mill into nineteen flats, delivered alongside the conservation officer over fourteen months." data-op-card-image="assets/dumper-truck-d6df7570-47ea0f02.jpg" data-op-card-link-label="View project" data-op-card-facts="Client|Harbour Living~~Completed|2025"><figure class="op-media wide"><img src="assets/dumper-truck-d6df7570-47ea0f02.jpg" alt="Harbour Mills" loading="lazy"></figure><div class="body"><span class="cat">Conversion</span><h3>Harbour Mills</h3><p>Nineteen flats in a grade II listed mill.</p></div></article><article class="op-card flush card" data-op-card data-op-card-title="Wells Street" data-op-card-eyebrow="Commercial" data-op-card-body="Reinstatement cost assessment and dilapidations advice for a parade of eleven shops, including negotiation of the schedule with three outgoing tenants." data-op-card-image="assets/dumper-truck-d6df7570-47ea0f02.jpg" data-op-card-link-label="View project" data-op-card-facts="Client|Private landlord~~Completed|2025"><figure class="op-media wide"><img src="assets/dumper-truck-d6df7570-47ea0f02.jpg" alt="Wells Street" loading="lazy"></figure><div class="body"><span class="cat">Commercial</span><h3>Wells Street</h3><p>Reinstatement valuation for a parade of shops.</p></div></article><article class="op-card flush card" data-op-card data-op-card-title="The Old Rectory" data-op-card-eyebrow="Residential" data-op-card-body="Level 3 survey on a 1780s stone rectory, identifying failed lime render and a bat roost in the west wing. The findings took £42,000 off the agreed price." data-op-card-image="assets/dumper-truck-d6df7570-47ea0f02.jpg" data-op-card-link-label="View project" data-op-card-facts="Client|Private buyer~~Completed|2024"><figure class="op-media wide"><img src="assets/dumper-truck-d6df7570-47ea0f02.jpg" alt="The Old Rectory" loading="lazy"></figure><div class="body"><span class="cat">Residential</span><h3>The Old Rectory</h3><p>Pre-purchase survey on a 1780s stone house.</p></div></article></div></div></section>
+<header id="sec-4lxacem" class="v-nav-simple sticky solid" data-op-nav><div class="inner"><a class="brand" href="#top"><span>GARVIT JAIN</span></a><nav class="links"><a href="#about">About</a><a href="#services">Services</a><a href="#work">Work</a><a href="#contact">Contact</a></nav><div class="tail"><a class="op-btn primary sm" href="#contact">Download PDF</a><button class="burger" type="button" data-op-nav-toggle aria-expanded="false" aria-label="Menu"><span></span><span></span><span></span></button></div></div><div class="sheet"><nav><a href="#about">About</a><a href="#services">Services</a><a href="#work">Work</a><a href="#contact">Contact</a><a class="op-btn primary sheet-cta" href="#contact">Download PDF</a></nav></div></header>
+<section id="sec-qvpqb1z" class="op-section v-hero-classic align-center" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(48px,6vw,96px)"><div class="op-shell"><div class="copy op-reveal"><span class="op-eyebrow">Backend engineer · Pune</span><h1 class="op-display">GARVIT JAIN</h1><p class="op-sub">Six years building payment and ledger systems. Currently at a fintech doing reconciliation at scale; open to senior roles.</p><div class="op-actions"><a class="op-btn primary" href="mailto:hello@example.com">Email me</a><a class="op-btn ghost" href="#">GitHub</a></div></div></div></section>
+<section id="sec-5bdoiul" class="op-section v-resume-experience" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(48px,6vw,96px)"><div class="op-shell"><div class="op-head op-align-left op-reveal "><span class="op-eyebrow">Experience</span><h2 class="op-title"><span class="op-gradient">Where I have worked</span></h2></div><div class="entries op-stagger"><article class="entry"><div class="when"><span class="op-num">March 2025 – Current</span><span class="loc">Bengaluru</span></div><div class="what"><h3>Software Engineer</h3><span class="org">Openturf</span><ul><li>Redesigned the account opening flow, cutting drop-off by 18 points</li><li>Built the first shared component library for the mobile team</li><li>Ran eleven moderated usability sessions</li></ul><div class="stack"><span class="op-chip">Visual Studio Code</span><span class="op-chip">Claude</span></div></div></article><article class="entry"><div class="when"><span class="op-num">2025 – present</span><span class="loc">Campus</span></div><div class="what"><h3>Design Lead</h3><span class="org">University Robotics Society</span><ul><li>Led a team of six across brand, web and event collateral</li><li>Doubled event registrations with a rebuilt registration site</li></ul><div class="stack"><span class="op-chip">Figma</span><span class="op-chip">Next.js</span></div></div></article><article class="entry"><div class="when"><span class="op-num">2024 – 2025</span><span class="loc">Remote</span></div><div class="what"><h3>Freelance Designer</h3><span class="org">Independent</span><ul><li>Nine client projects across identity and web</li><li>All delivered on schedule and within a fixed fee</li></ul><div class="stack"><span class="op-chip">Illustrator</span><span class="op-chip">Webflow</span></div></div></article></div></div></section>
+<section id="sec-dyuc80t" class="op-section v-education-cards" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(48px,6vw,96px)"><div class="op-shell"><div class="op-head op-align-left op-reveal "><span class="op-eyebrow">Credentials</span><h2 class="op-title"><span class="op-gradient">Education &amp; recognition</span></h2></div><div class="op-grid op-3 op-stagger"><article class="op-card op-ring cred"><span class="glyph"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8l10-4 10 4-10 4L2 8z"/><path d="M6 10.5V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.5"/></svg></span><h3>B.Des Interaction Design</h3><span class="issuer">National Institute of Design</span><div class="foot"><span class="op-num">2023 – 2027</span><span class="detail">Distinction, thesis on assistive interfaces</span></div></article><article class="op-card op-ring cred"><span class="glyph"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></span><h3>Google UX Certificate</h3><span class="issuer">Coursera</span><div class="foot"><span class="op-num">2025</span><span class="detail">Completed with honours</span></div></article><article class="op-card op-ring cred"><span class="glyph"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 10l6.1-.9z"/></svg></span><h3>Best Student Project</h3><span class="issuer">India Design Awards</span><div class="foot"><span class="op-num">2026</span><span class="detail">For a public transit wayfinding system</span></div></article></div></div></section>
+<section id="sec-4o377o8" class="op-section v-stats-progress" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(48px,6vw,96px)"><div class="op-shell"><div class="op-head op-align-left op-reveal "><span class="op-eyebrow">Toolkit</span><h2 class="op-title"><span class="op-gradient">Where the hours went</span></h2></div><div class="op-grid op-2 op-stagger meters"><div class="meter"><div class="top"><span class="label">Interface design</span><span class="pct">95%</span></div><div class="rail"><span class="fill" style="--w:95%"></span></div><span class="note">Figma, tokens, systems</span></div><div class="meter"><div class="top"><span class="label">Front-end engineering</span><span class="pct">88%</span></div><div class="rail"><span class="fill" style="--w:88%"></span></div><span class="note">TypeScript, React, CSS</span></div><div class="meter"><div class="top"><span class="label">Motion &amp; prototyping</span><span class="pct">76%</span></div><div class="rail"><span class="fill" style="--w:76%"></span></div><span class="note">Rive, Framer, GSAP</span></div><div class="meter"><div class="top"><span class="label">User research</span><span class="pct">64%</span></div><div class="rail"><span class="fill" style="--w:64%"></span></div><span class="note">Interviews, usability</span></div></div></div></section>
+<section id="sec-r0j8ob9" class="op-section v-cards-showcase" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(48px,6vw,96px)"><div class="op-shell"><div class="op-head op-align-left op-reveal "><h2 class="op-title"><span class="">Recent projects</span></h2><p class="op-sub">Click any project to read the detail.</p></div><div class="op-grid op-3 op-stagger"><article class="op-card flush card" data-op-card data-op-card-title="Harbour Mills" data-op-card-eyebrow="Conversion" data-op-card-body="A full condition survey and phased schedule of works for the conversion of a grade II listed mill into nineteen flats, delivered alongside the conservation officer over fourteen months." data-op-card-image="assets/onepage-studio-logo-light-89acbf86-d187cf54.png" data-op-card-link-label="View project" data-op-card-facts="Client|Harbour Living~~Completed|2025"><figure class="op-media wide"><img src="assets/onepage-studio-logo-light-89acbf86-d187cf54.png" alt="Harbour Mills" loading="lazy"></figure><div class="body"><span class="cat">Conversion</span><h3>Harbour Mills</h3><p>Nineteen flats in a grade II listed mill.</p></div></article><article class="op-card flush card" data-op-card data-op-card-title="Wells Street" data-op-card-eyebrow="Commercial" data-op-card-body="Reinstatement cost assessment and dilapidations advice for a parade of eleven shops, including negotiation of the schedule with three outgoing tenants." data-op-card-image="https://onepagestudio-backend.vercel.app/api/v1/assets/cmt2vt28b0001s4ugocmrl29x" data-op-card-link-label="View project" data-op-card-facts="Client|Private landlord~~Completed|2025"><figure class="op-media wide"><img src="https://onepagestudio-backend.vercel.app/api/v1/assets/cmt2vt28b0001s4ugocmrl29x" alt="Wells Street" loading="lazy"></figure><div class="body"><span class="cat">Commercial</span><h3>Wells Street</h3><p>Reinstatement valuation for a parade of shops.</p></div></article><article class="op-card flush card" data-op-card data-op-card-title="The Old Rectory" data-op-card-eyebrow="Residential" data-op-card-body="Level 3 survey on a 1780s stone rectory, identifying failed lime render and a bat roost in the west wing. The findings took £42,000 off the agreed price." data-op-card-image="https://onepagestudio-backend.vercel.app/api/v1/assets/cmt2vt28b0001s4ugocmrl29x" data-op-card-link-label="View project" data-op-card-facts="Client|Private buyer~~Completed|2024"><figure class="op-media wide"><img src="https://onepagestudio-backend.vercel.app/api/v1/assets/cmt2vt28b0001s4ugocmrl29x" alt="The Old Rectory" loading="lazy"></figure><div class="body"><span class="cat">Residential</span><h3>The Old Rectory</h3><p>Pre-purchase survey on a 1780s stone house.</p></div></article></div></div></section>
 <span class="op-anchor" id="contact" aria-hidden="true"></span>
-<section id="sec-267xgmu" class="op-section v-contact-simple" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(56px,8vw,132px)"><div class="op-shell"><div class="op-head op-align-left op-reveal "><h2 class="op-title"><span class="">Find us</span></h2></div><div class="details op-stagger"><div class="detail"><span class="ico"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6 7-11a7 7 0 10-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg></span><h3>Office</h3><p>12 Wells Street<br>Bristol BS1 4XY</p></div><div class="detail"><span class="ico"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3h3l1.6 4-2 1.4a12 12 0 006.5 6.5l1.4-2 4 1.6v3A2.5 2.5 0 0118.4 20 16 16 0 014 5.6 2.5 2.5 0 016.5 3z"/></svg></span><h3>Telephone</h3><a href="tel:+441170000000">+44 117 000 0000</a></div><div class="detail"><span class="ico"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M3 7l9 6 9-6"/></svg></span><h3>Email</h3><a href="mailto:hello@westbrook.co.uk">hello@westbrook.co.uk</a></div><div class="detail"><span class="ico"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.4l3.4 2"/></svg></span><h3>Hours</h3><p>Monday to Friday<br>9am – 6pm</p></div></div></div></section>
+<section id="sec-267xgmu" class="op-section v-contact-simple" style="padding-top:var(--op-pad);padding-bottom:var(--op-pad);--op-pad:clamp(48px,6vw,96px)"><div class="op-shell"><div class="op-head op-align-left op-reveal "><h2 class="op-title"><span class="">Find us</span></h2></div><div class="details op-stagger"><div class="detail"><span class="ico"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6 7-11a7 7 0 10-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg></span><h3>Office</h3><p>12 Wells Street<br>Bristol BS1 4XY</p></div><div class="detail"><span class="ico"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3h3l1.6 4-2 1.4a12 12 0 006.5 6.5l1.4-2 4 1.6v3A2.5 2.5 0 0118.4 20 16 16 0 014 5.6 2.5 2.5 0 016.5 3z"/></svg></span><h3>Telephone</h3><a href="tel:+441170000000">+44 117 000 0000</a></div><div class="detail"><span class="ico"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M3 7l9 6 9-6"/></svg></span><h3>Email</h3><a href="mailto:hello@westbrook.co.uk">hello@westbrook.co.uk</a></div><div class="detail"><span class="ico"><svg class="op-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.4l3.4 2"/></svg></span><h3>Hours</h3><p>Monday to Friday<br>9am – 6pm</p></div></div></div></section>
 <div id="sec-s6vzxjo" class="v-announce-bar"><div class="inner"><span class="badge">New</span><span class="msg">Something new has just launched. Take a look.</span><a href="#">See what’s new &rarr;</a></div></div>
 <div id="sec-z3t5eiy" class="v-marquee-strip outline" style="--dur:28s"><div class="track" data-op-marquee><span class="item">Design Systems<i>&#9670;</i></span><span class="item">Motion<i>&#9670;</i></span><span class="item">Brand<i>&#9670;</i></span><span class="item">Product<i>&#9670;</i></span><span class="item">Interfaces<i>&#9670;</i></span><span class="item">Research<i>&#9670;</i></span></div></div>
 <footer id="sec-0b5kok8" class="v-footer-minimal"><div class="op-shell inner"><span class="brand">NOVA</span><nav><a href="#">Privacy</a><a href="#">Terms</a><a href="#contact">Contact</a></nav><span class="legal">© 2026 Nova</span></div></footer>
@@ -487,6 +611,93 @@ ul{margin:0;padding:0;list-style:none}
     targets.forEach(function(el){io.observe(el)});
   }
 
+  /* ---- in-page jumps ---- */
+  /*
+   * Why a jump on a phone landed in the middle of a section instead of on its
+   * heading.
+   *
+   * The mobile menu is a '.sheet' inside the navbar, and the navbar is
+   * 'position:sticky' -- which still takes part in normal flow. An open sheet is
+   * therefore up to a screen tall *in the layout*, pushing every section below
+   * it down by that much. Tapping a link did two things at once: the runtime
+   * closed the menu, and the browser performed its native jump to the target's
+   * position measured right then, with the sheet still expanded. The sheet then
+   * spent 450ms collapsing, the content slid back up by several hundred pixels,
+   * and the visitor was left that far past the heading they asked for -- in the
+   * middle of the section's body text.
+   *
+   * So the jump is taken over here: close the menu, wait for the collapse to
+   * actually finish, then measure and scroll. Nothing is measured while the
+   * layout is still moving.
+   *
+   * The offset is the second half. Only '.op-anchor' carried a
+   * 'scroll-margin-top', so a link pointing straight at a section's own id -- an
+   * ordinary '#features' written into a navbar -- scrolled the heading to y=0
+   * underneath a sticky navbar that was still covering it. 'jumpOffset'
+   * measures the bar that is actually on screen rather than assuming a height,
+   * because these navbars condense on scroll and are not all the same size.
+   */
+  var scrollY=function(){return window.scrollY||d.documentElement.scrollTop||0};
+
+  var jumpOffset=function(){
+    var most=0;
+    d.querySelectorAll('[data-op-nav]').forEach(function(n){
+      var position=window.getComputedStyle(n).position;
+      if(position!=='sticky'&&position!=='fixed')return;
+      /* The visible bar, not the header -- the header also contains the sheet,
+         and measuring that would offset by the height of a menu that is on its
+         way out. */
+      var bar=n.querySelector('.bar')||n;
+      var height=bar.getBoundingClientRect().height;
+      if(height>most)most=height;
+    });
+    return most?most+16:0;
+  };
+
+  /* The element an in-page link points at, or null for anything that should be
+     left alone: an external link, a bare '#', a '#id' with nothing behind it. */
+  var targetOf=function(a){
+    var href=a.getAttribute('href')||'';
+    if(href.charAt(0)!=='#'||href.length<2)return null;
+    var id=href.slice(1);
+    try{id=decodeURIComponent(id)}catch(e){/* a literal % in an id */}
+    return d.getElementById(id);
+  };
+
+  var jumpTo=function(el,hash){
+    var y=el.getBoundingClientRect().top+scrollY()-jumpOffset();
+    window.scrollTo({top:y<0?0:y,behavior:reduce?'auto':'smooth'});
+    /* The address bar still gets the hash, so the link is copyable and the back
+       button behaves -- 'replaceState' rather than assigning 'location.hash',
+       which would trigger the native jump this exists to replace. */
+    if(hash&&window.history&&window.history.replaceState){
+      try{window.history.replaceState(null,'',hash)}catch(e){/* file:// */}
+    }
+    /* Move focus so the jump means something to a keyboard or screen reader
+       too, without stealing the scroll position back. */
+    if(el.setAttribute){
+      if(!el.hasAttribute('tabindex'))el.setAttribute('tabindex','-1');
+      try{el.focus({preventScroll:true})}catch(e){/* older browsers */}
+    }
+  };
+
+  /*
+   * Every in-page link on the page, except the two kinds that own their own
+   * behaviour: the scroll-to-top button, and anything inside a navbar -- a
+   * navbar link has to close the menu first and wait, which is handled below
+   * where the menu's state is known.
+   */
+  d.addEventListener('click',function(ev){
+    var node=ev.target;
+    if(!node||!node.closest)return;
+    var a=node.closest('a[href]');
+    if(!a||a.hasAttribute('data-op-totop')||a.closest('[data-op-nav]'))return;
+    var target=targetOf(a);
+    if(!target)return;
+    ev.preventDefault();
+    jumpTo(target,a.getAttribute('href'));
+  });
+
   /* ---- sticky nav state ---- */
   var navs=d.querySelectorAll('[data-op-nav]');
   if(navs.length){
@@ -497,10 +708,69 @@ ul{margin:0;padding:0;list-style:none}
     onScroll();window.addEventListener('scroll',onScroll,{passive:true});
     navs.forEach(function(n){
       var btn=n.querySelector('[data-op-nav-toggle]');
-      if(btn)btn.addEventListener('click',function(){n.classList.toggle('open')});
+      /* One place that decides the state, so the class, the button's label and
+         what a screen reader is told can never disagree. The burger draws itself
+         from the class and announces itself from aria-expanded. */
+      var setOpen=function(open){
+        n.classList.toggle('open',open);
+        if(btn){
+          btn.setAttribute('aria-expanded',String(open));
+          btn.setAttribute('aria-label',open?'Close menu':'Menu');
+        }
+      };
+      if(btn)btn.addEventListener('click',function(){setOpen(!n.classList.contains('open'))});
       n.querySelectorAll('a').forEach(function(a){
-        a.addEventListener('click',function(){n.classList.remove('open')});
+        a.addEventListener('click',function(ev){
+          var wasOpen=n.classList.contains('open');
+          setOpen(false);
+
+          var target=targetOf(a);
+          /* An outbound link, or one pointing at nothing: close the menu and
+             let the browser do what it was going to do. */
+          if(!target)return;
+          ev.preventDefault();
+
+          /* Closed already -- the desktop bar, or a menu that was never open.
+             Nothing is about to move, so measure now. */
+          if(!wasOpen){jumpTo(target,a.getAttribute('href'));return;}
+
+          /*
+             Open: the sheet is collapsing and everything below it is sliding up
+             with it. Measuring now would give the position the section is
+             leaving, which is the whole bug. Wait for the transition to report
+             that it has finished, with a timer as the backstop for the cases
+             where 'transitionend' never arrives -- a sheet that was already at
+             max-height, or a browser that skips the transition under reduced
+             motion. Whichever lands first wins; 'done' makes sure the jump
+             happens exactly once.
+          */
+          var sheet=n.querySelector('.sheet');
+          var done=false;
+          var run=function(){
+            if(done)return;
+            done=true;
+            jumpTo(target,a.getAttribute('href'));
+          };
+          if(sheet)sheet.addEventListener('transitionend',run,{once:true});
+          setTimeout(run,520);
+        });
       });
+      /* Escape closes it, the way it closes every other overlay. */
+      d.addEventListener('keydown',function(e){
+        if(e.key==='Escape'&&n.classList.contains('open'))setOpen(false);
+      });
+      /*
+         Rotating the phone, or widening the window past the breakpoint, leaves
+         an open menu that the stylesheet has stopped drawing -- so the page came
+         back with its links hidden and the burger still saying "Close menu".
+         The state is reset whenever the layout crosses back to the wide one.
+      */
+      if(window.matchMedia){
+        var wide=window.matchMedia('(min-width:861px)');
+        var onWide=function(){if(wide.matches)setOpen(false)};
+        if(wide.addEventListener)wide.addEventListener('change',onWide);
+        else if(wide.addListener)wide.addListener(onWide);
+      }
     });
   }
 
